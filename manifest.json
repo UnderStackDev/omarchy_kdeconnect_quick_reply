@@ -1,10 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "understack.quick-reply",
+  "id": "io.github.understackdev.quick-reply",
   "name": "Quick Reply",
   "version": "1.0.0",
   "author": "UnderStackDev",
   "license": "MIT",
+  "homepage": "https://github.com/UnderStackDev/omarchy_kdeconnect_quick_reply",
   "description": "A separate quick-reply channel for repliable phone notifications relayed by KDE Connect. One bar icon that appears only while a message from a whitelisted messaging app is waiting; a panel lists each with a reply field. Does not touch the normal notification stream.",
   "kinds": [
     "bar-widget"

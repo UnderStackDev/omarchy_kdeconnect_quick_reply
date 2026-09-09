@@ -5,7 +5,7 @@ channel** for repliable phone notifications relayed by KDE Connect — Messenger
 WhatsApp, SMS, Signal, … Type an answer straight from the bar and it goes back
 to the conversation on your phone.
 
-![Quick Reply panel](assets/screenshot.png)
+![Quick Reply panel](preview.png)
 
 It does not touch Omarchy's normal notification stream. It is a second, separate
 reader of the same source (KDE Connect's own D‑Bus objects) for one purpose:
@@ -50,7 +50,7 @@ hot‑reload, no restart):
 
 ```json
 {
-  "id": "understack.quick-reply",
+  "id": "io.github.understackdev.quick-reply",
   "apps": "WhatsApp, Messenger, Signal, Telegram, Messages, Viestit, SMS, Instagram, Element",
   "dismissAfterReply": true,
   "alwaysShow": false
@@ -67,7 +67,7 @@ hot‑reload, no restart):
 
 ```sh
 git clone https://github.com/UnderStackDev/omarchy_kdeconnect_quick_reply.git \
-  ~/.config/omarchy/plugins/understack.quick-reply
+  ~/.config/omarchy/plugins/io.github.understackdev.quick-reply
 ```
 
 Then in `~/.config/omarchy/shell.json` register the plugin and put it on the
@@ -76,10 +76,10 @@ next to the other status glyphs is a good home):
 
 ```json
 {
-  "plugins": [ { "id": "understack.quick-reply" } ],
+  "plugins": [ { "id": "io.github.understackdev.quick-reply" } ],
   "bar": {
     "layout": {
-      "center": [ "…", { "id": "understack.quick-reply" }, "…" ]
+      "center": [ "…", { "id": "io.github.understackdev.quick-reply" }, "…" ]
     }
   }
 }
@@ -91,14 +91,14 @@ next to the other status glyphs is a good home):
 ### Updating
 
 ```sh
-git -C ~/.config/omarchy/plugins/understack.quick-reply pull
+git -C ~/.config/omarchy/plugins/io.github.understackdev.quick-reply pull
 omarchy restart shell
 ```
 
 ### Removing
 
 ```sh
-omarchy plugin remove understack.quick-reply
+omarchy plugin remove io.github.understackdev.quick-reply
 ```
 
 …then drop its two `shell.json` entries and `omarchy restart shell`.
@@ -106,19 +106,19 @@ omarchy plugin remove understack.quick-reply
 ## Keybindings / scripting
 
 ```
-omarchy-shell understack.quick-reply toggle       open / close the panel
-omarchy-shell understack.quick-reply open
-omarchy-shell understack.quick-reply close
-omarchy-shell understack.quick-reply count        how many are waiting
-omarchy-shell understack.quick-reply list         waiting messages, as JSON
-omarchy-shell understack.quick-reply dismiss      acknowledge the newest, no reply
-omarchy-shell understack.quick-reply dismissAll   acknowledge all of them
+omarchy-shell io.github.understackdev.quick-reply toggle       open / close the panel
+omarchy-shell io.github.understackdev.quick-reply open
+omarchy-shell io.github.understackdev.quick-reply close
+omarchy-shell io.github.understackdev.quick-reply count        how many are waiting
+omarchy-shell io.github.understackdev.quick-reply list         waiting messages, as JSON
+omarchy-shell io.github.understackdev.quick-reply dismiss      acknowledge the newest, no reply
+omarchy-shell io.github.understackdev.quick-reply dismissAll   acknowledge all of them
 ```
 
 Example — in `~/.config/hypr/bindings.lua`:
 
 ```lua
-o.bind("SUPER + ALT + M", "Quick reply", "omarchy-shell understack.quick-reply toggle")
+o.bind("SUPER + ALT + M", "Quick reply", "omarchy-shell io.github.understackdev.quick-reply toggle")
 ```
 
 ## Requirements

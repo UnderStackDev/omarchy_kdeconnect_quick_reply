@@ -30,7 +30,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "understack.quick-reply"
+  moduleName: "io.github.understackdev.quick-reply"
 
   // ------------------------------------------------------------- settings
   // Comma-separated phone-app names. Case-insensitive, partial match both
@@ -249,9 +249,9 @@ BarWidget {
   Component.onCompleted: root.refresh()
 
   // ------------------------------------------------------------- IPC
-  // omarchy-shell understack.quick-reply toggle|open|close|count|list|dismiss|dismissAll
+  // omarchy-shell io.github.understackdev.quick-reply toggle|open|close|count|list|dismiss|dismissAll
   IpcHandler {
-    target: "understack.quick-reply"
+    target: "io.github.understackdev.quick-reply"
     function toggle(): string { root.togglePanel(); return controller.open ? "open" : "closed" }
     function open(): string { root.open(); return "open" }
     function close(): string { root.close(); return "closed" }
