@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "id": "understack.quick-reply",
+  "name": "Quick Reply",
+  "version": "1.0.0",
+  "author": "UnderStackDev",
+  "license": "MIT",
+  "description": "A separate quick-reply channel for repliable phone notifications relayed by KDE Connect. One bar icon that appears only while a message from a whitelisted messaging app is waiting; a panel lists each with a reply field. Does not touch the normal notification stream.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "Quick Reply",
+    "description": "Appears only while a repliable message from a whitelisted app (WhatsApp, Messenger, SMS, ...) is waiting. Click to open a panel with a reply field per message. Reply goes back through KDE Connect and the notification is cleared on the phone.",
+    "category": "Status",
+    "aliases": [
+      "quick-reply",
+      "quickreply",
+      "reply",
+      "kdeconnect"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "center",
+    "defaults": {
+      "apps": "WhatsApp, Messenger, Signal, Telegram, Messages, Viestit, SMS, Instagram, Element, Google Messages, Samsung Messages",
+      "dismissAfterReply": true,
+      "alwaysShow": false
+    },
+    "schema": [
+      {
+        "key": "apps",
+        "type": "string",
+        "label": "Reply-worthy apps",
+        "defaultValue": "WhatsApp, Messenger, Signal, Telegram, Messages, Viestit, SMS, Instagram, Element, Google Messages, Samsung Messages",
+        "description": "Comma-separated phone-app names. Only notifications whose app matches one of these ever produce the bar icon. Match is case-insensitive and partial. KDE Connect marks lots of apps repliable (X, Claude, ...) even when a reply is meaningless; this list is the gate. Empty = allow every repliable app."
+      },
+      {
+        "key": "dismissAfterReply",
+        "type": "boolean",
+        "label": "Dismiss notification after replying",
+        "defaultValue": true,
+        "description": "Call the notification's dismiss() after a successful reply so it clears on the phone and stops being re-forwarded. Only applies to notifications KDE Connect marks dismissable."
+      },
+      {
+        "key": "alwaysShow",
+        "type": "boolean",
+        "label": "Always show the icon",
+        "defaultValue": false,
+        "description": "Keep the bar slot even when nothing is waiting, so the bar centre never shifts. Off by default: the icon appearing is the signal."
+      }
+    ]
+  }
+}
