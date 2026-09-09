@@ -154,7 +154,12 @@ BarWidget {
     sending = true
     errorText = ""
     replyProc.entry = entry
-    replyProc.command = [root.helper, "reply", String(entry.path), text]
+    // The message text goes to the helper over stdin, never as an argv element
+    // (argv is world-readable via /proc/<pid>/cmdline). argv carries only the
+    // verb and the notification's object path.
+    replyProc.payload = text
+    replyProc.command = [root.helper, "reply", String(entry.path)]
+    replyProc.stdinEnabled = true   // re-armed for each reply
     replyProc.running = true
   }
 
@@ -171,8 +176,17 @@ BarWidget {
   Process {
     id: replyProc
     property var entry: null
+    property string payload: ""
+    stdinEnabled: true
     stdout: StdioCollector { id: replyOut }
     stderr: StdioCollector { id: replyErr }
+    onStarted: {
+      replyProc.write(replyProc.payload)
+      replyProc.payload = ""
+      // Closing stdin is how Quickshell sends EOF, which is what lets the
+      // helper's bounded read() return.
+      replyProc.stdinEnabled = false
+    }
     onExited: function (code) {
       root.sending = false
       var e = replyProc.entry

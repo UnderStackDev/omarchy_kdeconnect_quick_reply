@@ -126,8 +126,11 @@ o.bind("SUPER + ALT + M", "Quick reply", "omarchy-shell io.github.understackdev.
 - **Omarchy** with the Quickshell bar (`omarchy.bar`).
 - **KDE Connect** running with a paired device — `kdeconnect-cli -l` to check.
   Without it there is nothing to read and the icon never appears.
-- **`busctl`** (systemd) on `PATH`.
-- **Python 3** for `bin/qr-kdeconnect`.
+- **`busctl`** (systemd) on `PATH` — used to enumerate notifications.
+- **Python 3** with **python-gobject** (`gi` / GDBus) — `bin/qr-kdeconnect`
+  makes the `sendReply` / `dismiss` D‑Bus calls in‑process so the reply text is
+  never a subprocess argument. python-gobject ships with every GTK‑based
+  desktop, Omarchy included.
 
 ## How it talks to KDE Connect
 
@@ -138,11 +141,13 @@ Service `org.kde.kdeconnect` on the **session** bus:
 | `…/notifications/<leaf>` | `org.kde.kdeconnect.device.notifications.notification` | read `replyId` (non‑empty ⇒ repliable), `appName`, `title`, `ticker`, `text`, `dismissable`, `iconPath`; call `dismiss()` |
 | `…/notifications` | `org.kde.kdeconnect.device.notifications` | call `sendReply(replyId, message)`; its `notification{Posted,Removed,Updated}` / `allNotificationsRemoved` signals wake a rescan |
 
-`bin/qr-kdeconnect` (Python 3) enumerates with `busctl --user tree`, reads
-properties with `busctl -j`, and makes the `sendReply` / `dismiss` calls. Every
-argument is passed as an argv array — **reply text is never run through a
-shell**. `Widget.qml` keeps a `busctl --user monitor` open for liveness, with a
-15‑second rescan as a backstop.
+`bin/qr-kdeconnect` (Python 3) enumerates notification objects with
+`busctl --user tree` / `busctl -j` — object paths and interface names only.
+The mutating calls, **`sendReply` and `dismiss`, go through GDBus in‑process**
+(`gi.repository.Gio`), not a subprocess. The **reply text is passed to the
+helper on stdin, bounded to 64 KiB, and never appears in any process's argv**
+(`/proc/<pid>/cmdline`). `Widget.qml` keeps a `busctl --user monitor` open for
+liveness, with a 15‑second rescan as a backstop.
 
 ## Files
 
@@ -150,7 +155,7 @@ shell**. `Widget.qml` keeps a `busctl --user monitor` open for liveness, with a
 | --- | --- |
 | `manifest.json` | Plugin manifest (`bar-widget`, settings schema) |
 | `Widget.qml` | The bar icon (Lucide `message-circle`, drawn from its path), the panel, and all the wiring |
-| `bin/qr-kdeconnect` | `list` / `reply` / `dismiss` over `busctl`, argv‑safe |
+| `bin/qr-kdeconnect` | `list` (busctl enumerate) · `reply` (text on stdin, `sendReply` via GDBus) · `dismiss` (via GDBus) |
 
 ## Self‑check
 

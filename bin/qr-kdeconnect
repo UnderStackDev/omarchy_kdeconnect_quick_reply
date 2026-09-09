@@ -2,7 +2,7 @@
 # qr-kdeconnect - the phone side of a quick reply.
 #
 #   qr-kdeconnect list                every repliable phone notification, as JSON
-#   qr-kdeconnect reply PATH TEXT     send TEXT back into that conversation
+#   qr-kdeconnect reply PATH          send a reply -- TEXT is read from stdin
 #   qr-kdeconnect dismiss PATH        clear the notification on the phone
 #
 # KDE Connect mirrors phone notifications onto the desktop bus like any other
@@ -22,8 +22,12 @@
 # the local PNG KDE Connect wrote for the notification (usually the sender's
 # avatar for a chat app), or "" when there is none.
 #
-# All subprocess arguments are passed as an argv array. Reply text is never
-# run through a shell.
+# Argv discipline: the reply text is private message content and NEVER appears
+# as an argv element -- argv is world-readable through /proc/<pid>/cmdline. It
+# is read from stdin (bounded), and `reply` / `dismiss` make their D-Bus calls
+# in-process via GDBus (python-gobject), so the text is not an argument of any
+# subprocess either. Only `list` still shells out to `busctl`, and its argv
+# carries nothing but object paths and interface names.
 
 import json
 import os
@@ -33,6 +37,29 @@ import sys
 BUS = "org.kde.kdeconnect"
 IFACE_NOTE = "org.kde.kdeconnect.device.notifications.notification"
 IFACE_PARENT = "org.kde.kdeconnect.device.notifications"
+
+# Largest reply we will read off stdin. KDE Connect replies are short; this is
+# only a guard against an unbounded read.
+MAX_REPLY_BYTES = 64 * 1024
+
+
+def dbus_call(object_path, iface, method, signature, args, timeout_ms=8000):
+    """Call a session-bus method in-process (no subprocess, no argv).
+    Returns (ok: bool, error: str)."""
+    try:
+        import gi
+        gi.require_version("Gio", "2.0")
+        from gi.repository import Gio, GLib
+    except Exception as exc:
+        return False, "python-gobject (gi) is required for D-Bus calls: %s" % exc
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        params = GLib.Variant(signature, tuple(args)) if signature else None
+        bus.call_sync(BUS, object_path, iface, method, params, None,
+                      Gio.DBusCallFlags.NONE, timeout_ms, None)
+        return True, ""
+    except Exception as exc:
+        return False, str(exc)
 
 
 def run(args, timeout=8):
@@ -131,9 +158,14 @@ def main():
         return 0
 
     if verb == "reply":
-        if len(sys.argv) < 4:
+        if len(sys.argv) < 3:
             return 2
-        path, text = sys.argv[2], sys.argv[3]
+        path = sys.argv[2]
+        # Text on stdin, never argv. Bounded read; EOF (the caller closing the
+        # pipe) ends it.
+        text = sys.stdin.buffer.read(MAX_REPLY_BYTES).decode("utf-8", "replace")
+        if text.endswith("\n"):
+            text = text[:-1]
         if not text.strip():
             return 1
         props = properties(path) or {}
@@ -142,18 +174,11 @@ def main():
             sys.stderr.write("no replyId on " + path)
             return 1
         notifications_path = path.rsplit("/", 1)[0]
-        res = run(
-            [
-                "busctl", "--user", "call", BUS, notifications_path,
-                IFACE_PARENT, "sendReply", "ss", reply_id, text,
-            ]
-        )
-        if res is None:
-            sys.stderr.write("busctl sendReply did not run")
+        ok, err = dbus_call(notifications_path, IFACE_PARENT, "sendReply",
+                            "(ss)", (reply_id, text))
+        if not ok:
+            sys.stderr.write("sendReply failed: " + err)
             return 1
-        if res.returncode != 0:
-            sys.stderr.write(res.stderr.strip())
-            return res.returncode
         sys.stdout.write("sent")
         return 0
 
@@ -161,10 +186,10 @@ def main():
         if len(sys.argv) < 3:
             return 2
         path = sys.argv[2]
-        res = run(["busctl", "--user", "call", BUS, path, IFACE_NOTE, "dismiss"])
-        if res is None or res.returncode != 0:
-            sys.stderr.write(res.stderr.strip() if res else "dismiss did not run")
-            return 1 if res is None else res.returncode
+        ok, err = dbus_call(path, IFACE_NOTE, "dismiss", "", ())
+        if not ok:
+            sys.stderr.write("dismiss failed: " + err)
+            return 1
         sys.stdout.write("dismissed")
         return 0
 
