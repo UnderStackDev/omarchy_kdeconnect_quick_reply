@@ -21,6 +21,7 @@
 // only while there is something to act on. Nothing waiting -> no icon.
 
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Effects
 import QtQuick.Shapes
 import Quickshell
@@ -72,6 +73,14 @@ BarWidget {
   // from view straight away and kept out until KDE Connect's own list loses
   // them, so a message that is not `dismissable` still clears from the panel.
   property var _dismissed: ({})
+  // Some apps (WhatsApp observed) answer sendReply by posting a brand-new
+  // notification that just echoes the text back — a different object path,
+  // so `dismiss`-by-path on the original doesn't catch it, and it would
+  // otherwise reappear as a second "message waiting" needing its own ✕. Each
+  // successful send is remembered here for a short window so _refilter can
+  // recognise and silently swallow that echo instead of surfacing it.
+  property var _recentSent: []
+  readonly property int echoWindowMs: 8000
   // What the widget renders: _rawAll minus the whitelist and _dismissed.
   property var pending: []
   readonly property int count: pending.length
@@ -96,26 +105,78 @@ BarWidget {
     _refilter()
   }
 
+  // Prunes expired sent-text entries and reports whether `e` looks like the
+  // phone's echo of one of them (same app, body matches the text we just
+  // sent). Returns the matching index into `recent`, or -1.
+  function _matchEcho(e, recent) {
+    var app = String(e.appName || "").toLowerCase().replace(/\s+/g, " ").trim()
+    var body = String(e.body || "").trim()
+    if (body.length === 0)
+      return -1
+    for (var i = 0; i < recent.length; i++) {
+      var r = recent[i]
+      if (r.app !== app || r.text.length === 0)
+        continue
+      if (body === r.text || body.indexOf(r.text) >= 0 || r.text.indexOf(body) >= 0)
+        return i
+    }
+    return -1
+  }
+
   function _refilter() {
+    var now = Date.now()
+    var recent = root._recentSent.filter(function (r) { return (now - r.ts) < root.echoWindowMs })
+
     var out = []
     var seen = {}
+    var d = root._dismissed
+    var dChanged = false
+    var echoPaths = []
     for (var i = 0; i < _rawAll.length; i++) {
       var e = _rawAll[i]
-      seen[String(e.path)] = true
-      if (root._dismissed[String(e.path)])
+      var p = String(e.path)
+      seen[p] = true
+      if (d[p])
         continue
-      if (root.allowed(e.appName))
-        out.push(e)
+      if (!root.allowed(e.appName))
+        continue
+      var echoIdx = root._matchEcho(e, recent)
+      if (echoIdx >= 0) {
+        // The phone's own echo of a reply we just sent — acknowledge it
+        // silently rather than showing it as a new message. Consume the
+        // matched sent-text so it can only swallow one echo.
+        recent.splice(echoIdx, 1)
+        d[p] = true
+        dChanged = true
+        echoPaths.push(p)
+        continue
+      }
+      out.push(e)
     }
     // Drop sticky dismissals once the message is gone from KDE Connect too.
-    var d = root._dismissed
-    var pruned = false
-    for (var p in d) {
-      if (!seen[p]) { delete d[p]; pruned = true }
+    for (var pth in d) {
+      if (!seen[pth]) { delete d[pth]; dChanged = true }
     }
-    if (pruned)
+    if (dChanged)
       root._dismissed = d
+    root._recentSent = recent
     pending = out
+
+    if (echoPaths.length > 0) {
+      var q = root._dismissQueue.slice()
+      for (var k = 0; k < echoPaths.length; k++) q.push(echoPaths[k])
+      root._dismissQueue = q
+      root._pumpDismiss()
+    }
+  }
+
+  function _noteSent(entry, text) {
+    var t = String(text || "").trim()
+    if (t.length === 0 || !entry)
+      return
+    var r = root._recentSent.slice()
+    r.push({ app: String(entry.appName || "").toLowerCase().replace(/\s+/g, " ").trim(), text: t, ts: Date.now() })
+    root._recentSent = r
   }
 
   // Acknowledge a message without answering it: drop it from view now, and
@@ -154,6 +215,7 @@ BarWidget {
     sending = true
     errorText = ""
     replyProc.entry = entry
+    replyProc.sentText = text
     // The message text goes to the helper over stdin, never as an argv element
     // (argv is world-readable via /proc/<pid>/cmdline). argv carries only the
     // verb and the notification's object path.
@@ -177,6 +239,7 @@ BarWidget {
     id: replyProc
     property var entry: null
     property string payload: ""
+    property string sentText: ""
     stdinEnabled: true
     stdout: StdioCollector { id: replyOut }
     stderr: StdioCollector { id: replyErr }
@@ -190,8 +253,14 @@ BarWidget {
     onExited: function (code) {
       root.sending = false
       var e = replyProc.entry
+      var sentText = replyProc.sentText
       replyProc.entry = null
+      replyProc.sentText = ""
       if (code === 0) {
+        // Some apps (WhatsApp) answer a sent reply with a fresh echo
+        // notification of their own — remember what we sent so _refilter
+        // can recognise and swallow it instead of showing it as new.
+        root._noteSent(e, sentText)
         // Answered is dealt with: drop it from view now, and (when it is
         // dismissable and the setting is on) clear it on the phone too. Both
         // go through dismiss(), which is the same path the corner ✕ uses.
@@ -425,6 +494,56 @@ BarWidget {
             path: "M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"
           }
         }
+      }
+    }
+  }
+
+  // The reply box. qs.Ui only ships a single-line TextField, which is no
+  // good here — before sending you should be able to see the whole message,
+  // not a caret scrolling through one line. Same border/fill styling as
+  // Ui/TextField.qml, but wraps and grows with its content (Controls size
+  // themselves to implicitHeight when height isn't set, so nothing else
+  // needs to be told to grow — the card, the card list and its Flickable
+  // above all just follow). Enter still sends, like the field it replaces;
+  // Shift+Enter (or Ctrl+Enter) inserts a newline instead of sending.
+  component ReplyArea: TextArea {
+    id: ta
+    signal accepted()
+
+    property color foreground: Color.foreground
+    property color accent: Color.accent
+    property color selectionTint: Style.selectionFillFor(foreground, accent)
+    property real horizontalPadding: Style.spacing.controlPaddingX
+    property real verticalPadding: Style.spacing.inputPaddingY
+
+    readonly property bool _focused: activeFocus
+    readonly property bool _hot: hovered
+    readonly property var _borderSpec: Border.controlSpec(_focused ? "focus" : (_hot ? "hover-cursor" : "normal"), ta.foreground, ta.accent)
+
+    wrapMode: TextArea.Wrap
+    font.family: Style.font.family
+    font.pixelSize: Style.font.body
+    color: foreground
+    selectionColor: selectionTint
+    selectedTextColor: foreground
+    placeholderTextColor: Qt.darker(foreground, 1.6)
+
+    leftPadding: horizontalPadding + Border.left(_borderSpec)
+    rightPadding: horizontalPadding + Border.right(_borderSpec)
+    topPadding: verticalPadding + Border.top(_borderSpec)
+    bottomPadding: verticalPadding + Border.bottom(_borderSpec)
+
+    background: BorderSurface {
+      color: Style.controlFill(ta._focused, ta._hot, ta.foreground, ta.accent)
+      borderSpec: ta._borderSpec
+      radius: Style.cornerRadius
+    }
+
+    Keys.onPressed: function (event) {
+      if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+          && !(event.modifiers & (Qt.ShiftModifier | Qt.ControlModifier))) {
+        event.accepted = true
+        ta.accepted()
       }
     }
   }
@@ -760,14 +879,14 @@ BarWidget {
                 }
 
                 // Reply box, full width; the send button appears under it once
-                // there is something to send. Enter sends too.
-                TextField {
+                // there is something to send. Enter sends too. Grows with the
+                // message instead of scrolling it, so it can be checked before
+                // it goes out.
+                ReplyArea {
                   id: field
                   width: parent.width
                   foreground: panel.fg
                   accent: Color.accent
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.body
                   verticalPadding: Style.space(8)
                   horizontalPadding: Style.space(12)
                   enabled: !root.sending
