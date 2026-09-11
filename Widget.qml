@@ -697,6 +697,7 @@ BarWidget {
                     Text {
                       width: parent.width
                       text: String(mrow.modelData.appName || "Message").toUpperCase()
+                      textFormat: Text.PlainText
                       color: panel.fgFaint
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
@@ -708,6 +709,7 @@ BarWidget {
                       width: parent.width
                       visible: text.length > 0
                       text: String(mrow.modelData.title || "")
+                      textFormat: Text.PlainText
                       color: panel.fg
                       font.family: Style.font.family
                       font.pixelSize: Style.font.subtitle
@@ -746,6 +748,7 @@ BarWidget {
                   width: parent.width
                   visible: text.length > 0
                   text: String(mrow.modelData.body || "")
+                  textFormat: Text.PlainText
                   color: panel.fgMuted
                   font.family: Style.font.family
                   font.pixelSize: Style.font.body
