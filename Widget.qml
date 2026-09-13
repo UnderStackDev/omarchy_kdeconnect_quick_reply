@@ -708,36 +708,6 @@ BarWidget {
         }
       }
 
-      // ---- Empty state.
-      Column {
-        visible: root.available && root.count === 0
-        width: parent.width
-        spacing: Style.space(10)
-        topPadding: Style.space(12)
-        bottomPadding: Style.space(12)
-
-        Text {
-          width: parent.width
-          text: "A repliable message from a whitelisted app lands here with a reply box. Everything else KDE Connect relays is left to the notification centre."
-          color: panel.fgMuted
-          font.family: Style.font.family
-          font.pixelSize: Style.font.body
-          wrapMode: Text.WordWrap
-          lineHeight: 1.35
-        }
-
-        Text {
-          width: parent.width
-          text: (root.whitelist.length > 0 ? root.whitelist.join("   ·   ") : "any repliable app").toUpperCase()
-          color: panel.fgFaint
-          font.family: Style.font.family
-          font.pixelSize: Style.font.caption
-          font.letterSpacing: 1
-          wrapMode: Text.WordWrap
-          lineHeight: 1.6
-        }
-      }
-
       // ---- Waiting messages.
       Flickable {
         visible: root.count > 0
